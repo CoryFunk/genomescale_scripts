@@ -212,3 +212,49 @@ createAverageModel <- function(mtx.assay, gene.list, num.cores = NULL,
     return(full.result.list)
 
 } # createAverageModel
+
+#----------------------------------------------------------------------------------------------
+getProxProbesPromoter <- function(probeIDs,
+                   tssUpstream = 5000,
+                   tssDownstream = 5000){
+
+              # Switch the name of the database and filter we use
+              db.name <-  "hsapiens_gene_ensembl"
+              
+              filter.name <- "illumina_humanht_12_v4"
+
+              my.mart <- biomaRt::useMart(biomart="ensembl", dataset= db.name)
+
+              tbl.geneInfo <- biomaRt::getBM(attributes=c("chromosome_name",
+                                                          "transcription_start_site",
+                                                          "transcript_tsl",
+                                                          "hgnc_symbol",
+                                                          filter.name),
+                                             filters=filter.name, value=probeIDs, mart=my.mart)
+
+              if(nrow(tbl.geneInfo) == 0)
+                  return(NA)
+
+              # Sort by hgnc_symbol and transcript_tsl, then pull the first entry for each gene
+              tbl.geneInfo <- tbl.geneInfo[order(tbl.geneInfo[[filter.name]],
+                                                 tbl.geneInfo$transcript_tsl),]
+              tbl.geneInfo <- tbl.geneInfo[match(unique(tbl.geneInfo[[filter.name]]),
+                                                 tbl.geneInfo[[filter.name]]),]
+
+              # remove contigs and check to make sure it's just 1 chromosome
+              tbl.geneInfo <- subset(tbl.geneInfo, chromosome_name %in% c(1:22, "X", "Y", "MT"))
+              chrom <- sprintf("chr%s", tbl.geneInfo$chromosome_name)
+
+              tss <- tbl.geneInfo$transcription_start_site
+              start.loc <- tss - tssDownstream
+              end.loc   <- tss + tssUpstream
+
+              temp <- data.frame(geneSymbol=tbl.geneInfo$hgnc_symbol,
+                                 chrom=chrom,
+                                 start=start.loc,
+                                 end=end.loc,
+                                 stringsAsFactors=FALSE)
+                                 
+              return (temp[!(duplicated(temp$geneSymbol)),])
+
+          }
